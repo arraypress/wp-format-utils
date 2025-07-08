@@ -1,0 +1,45 @@
+{
+  "name": "arraypress/wp-format-utils",
+  "version": "1.0.0",
+  "description": "Display formatting utilities for WordPress with internationalization support",
+  "type": "library",
+  "license": "GPL-2.0-or-later",
+  "homepage": "https://github.com/arraypress/wp-format-utils/",
+  "authors": [
+    {
+      "name": "David Sherlock",
+      "homepage": "https://arraypress.com/"
+    }
+  ],
+  "require": {
+    "php": ">=7.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "ArrayPress\\FormatUtils\\": "src/"
+    }
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true,
+    "preferred-install": "dist"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "support": {
+    "issues": "https://github.com/arraypress/wp-format-utils/issues",
+    "source": "https://github.com/arraypress/wp-format-utils"
+  },
+  "keywords": [
+    "wordpress",
+    "formatting",
+    "display",
+    "wp",
+    "arraypress",
+    "internationalization",
+    "i18n",
+    "templates",
+    "output",
+    "presentation"
+  ]
+}

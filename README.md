@@ -1,21 +1,53 @@
-# WordPress Format Utilities
+# WP Format Utils
 
-Display formatting utilities for WordPress with full internationalization support. Provides clean, consistent formatting for numbers, dates, text, and data presentation across WordPress themes and plugins.
+Display formatting: byte sizes, durations, compact numbers, word-safe truncation, deterministic initials avatars, and file-type labels. Parses back what it formats. Zero dependencies.
+
+## Why
+
+Every application rewrites these, and each rewrite is subtly worse than the last: a truncation that counts bytes and cuts a multi-byte character in half, a `100.0 MB` nobody wanted, an ordinal that renders `11st`, an avatar palette that reshuffles every time the list paginates.
+
+None of it is hard. It is just never worth anybody's afternoon, so it gets done in five minutes and stays wrong.
 
 ## Features
 
-* 🌍 **Internationalization Ready**: Full i18n support using WordPress translation functions
-* 📊 **Number Formatting**: Percentages and numeric values with WordPress standards
-* 📅 **Date/Time Formatting**: WordPress-compatible date formatting with timezone support
-* 📝 **Text Formatting**: HTML processing, truncation, and label generation
-* ✅ **Boolean Formatting**: Translatable yes/no, on/off, true/false strings
-* 📋 **List Formatting**: Smart lists with overflow handling and natural language conjunctions
-* 🛡️ **WordPress-Native**: Leverages WordPress core functions for consistency
+- 💾 **Bytes both ways** — binary and decimal units, and a parser that reads `2 MB` back to `2097152`.
+- ⏱️ **Durations in three registers** — `4:03` for media, `2h 5m` for tables, `about two hours` for prose.
+- ✂️ **Truncation that counts characters** — never splits a word, never splits a codepoint, and includes the ellipsis in the budget.
+- 🔢 **Compact numbers** — `1.2k`, `3.4M`, plus percentages and period-over-period change.
+- 🎨 **Deterministic avatars** — an SVG data URI from a name; the same name is always the same colour.
+- 📁 **File kinds** — coarse buckets for grouping and filtering, from a filename or a MIME type.
+
+
+## Booleans
+
+A value that has been through a database and a form is rarely a real boolean.
+Meta comes back as the string `"0"`, a checkbox posts `"on"`, and a setting
+that has been JSON encoded and decoded carries `"false"` — which PHP reads as
+true, being a non-empty string.
+
+```php
+use ArrayPress\\FormatUtils\\Booleans;
+
+Booleans::truthy( 'false' );   // false, not true
+Booleans::yes_no( '0' );       // 'No'
+Booleans::enabled( 'on' );     // 'Enabled'
+```
+
+`yes_no()`, `enabled()`, `on_off()` and `active()` go through the translation
+functions, which is why they live here rather than inline.
+
+## Nothing to show
+
+```php
+Text::dash( null );    // '—'
+Text::dash( 0 );       // '0'  — zero is a value, not an absence
+```
+
+A blank cell in a list table reads as a column that failed to load.
 
 ## Requirements
 
-* PHP 7.4 or later
-* WordPress 5.0 or later
+PHP 8.3+
 
 ## Installation
 
@@ -23,241 +55,126 @@ Display formatting utilities for WordPress with full internationalization suppor
 composer require arraypress/wp-format-utils
 ```
 
-## Basic Usage
-
-### Boolean Formatting
+## Bytes
 
 ```php
-use ArrayPress\FormatUtils\Format;
+use ArrayPress\FormatUtils\Bytes;
 
-// Translatable boolean strings
-Format::yes_no( true );              // 'yes' (translatable)
-Format::yes_no( true, true );        // 'Yes' (translatable, title case)
-Format::on_off( false );             // 'off' (translatable)
-Format::true_false( true );          // 'true' (translatable)
-
-// Perfect for admin interfaces and form display
-$enabled = get_option( 'feature_enabled' );
-echo Format::yes_no( $enabled, true ); // Shows 'Yes' or 'No' in user's language
+Bytes::format( 1572864 );                  // '1.5 MB'
+Bytes::format( 104857600 );                // '100 MB'  — not '100.0 MB'
+Bytes::format( 1000, decimal: true );      // '1 kB'
+Bytes::parse( '2 MB' );                    // 2097152
+Bytes::parse( '1,024 KB' );                // 1048576
+Bytes::rate( 1000000, 2.0 );               // '500 kB/s'
 ```
 
-### Number Formatting
+Binary (1 KB = 1024) is the default because this is usually describing a file, and it is what a filesystem reports and what an upload limit means. Decimal (1 kB = 1000) is what a disk manufacturer prints on the box and what a transfer rate uses — which is the entire content of "why does my 500 GB drive show 465 GB?":
 
 ```php
-// WordPress i18n number formatting (returns em dash for non-numeric)
-Format::numeric( 1234.56 );         // '1,234.56' (respects locale)
-Format::numeric( 1234.56, 0 );      // '1,235' (no decimals)
-Format::numeric( 'invalid' );       // '—' (em dash)
-
-// Percentage formatting
-Format::percentage( 0.75 );         // '75%'
-Format::percentage( 0.756, 1 );     // '75.6%'
+Bytes::format( 500 * (1000 ** 3), decimal: true );  // '500 GB'
+Bytes::format( 500 * (1000 ** 3) );                 // '465.7 GB'
 ```
 
-### Date and Time Formatting
+`parse()` reads `KB` and `KiB` alike as 1024, because people writing `KB` in a config file mean the binary unit.
+
+## Durations
 
 ```php
-// WordPress i18n date formatting (accepts timestamp, string, or DateTime)
-Format::date( '2024-01-15' );                    // 'January 15, 2024' (translated)
-Format::date( '2024-01-15', 'Y-m-d' );          // '2024-01-15'
-Format::date( time(), 'F j, Y', false );        // English only
+use ArrayPress\FormatUtils\Duration;
 
-// Duration formatting
-Format::duration( 90 );                         // '1 minutes'
-Format::duration( 3661 );                       // '1 hours 1 minutes'
-Format::duration( 3661, true );                 // '1h 1m' (abbreviated)
-Format::duration( 90061 );                      // '1 days 1 hours'
-
-// Relative time
-Format::time_ago( strtotime( '-2 hours' ) );    // '2 hours ago'
+Duration::clock( 243 );      // '4:03'      — media, aligned
+Duration::clock( 3723 );     // '1:02:03'
+Duration::compact( 7500 );   // '2h 5m'     — tables
+Duration::words( 7500 );     // 'about 2 hours' — prose
+Duration::parse( '2h 5m' );  // 7500
 ```
 
-### Text Formatting
+`clock()` omits the hour below an hour, because `0:04:03` on a four-minute track is noise. `compact()` shows two units by default, since the third never changes a decision. `words()` is deliberately imprecise: where a duration is read rather than measured, a rounded phrase carries the meaning and a precise one invites arithmetic the reader did not want to do.
+
+## Text
 
 ```php
-// WordPress text processing
-Format::html( "Hello\n\nWorld" );               // '<p>Hello</p><p>World</p>'
+use ArrayPress\FormatUtils\Text;
 
-// Key to label conversion
-Format::label( 'first_name' );                  // 'First Name'
-Format::label( 'user-profile-id' );             // 'User Profile Id'
-
-// Multibyte-safe truncation
-Format::excerpt( $long_text, 100 );             // 'First 97 chars...'
-Format::excerpt( $text, 50, '…' );              // 'First 49 chars…'
-
-// Email link generation
-Format::email_link( 'user@example.com' );       
-// '<a href="mailto:user@example.com">user@example.com</a>'
-
-Format::email_link( 'user@example.com', 'Contact Us' ); 
-// '<a href="mailto:user@example.com">Contact Us</a>'
-
-// Rating with proper pluralization
-Format::rating( 1 );                            // '1 Star'
-Format::rating( 4 );                            // '4 Stars'
-Format::rating( 0 );                            // 'No Rating'
+Text::truncate( $title, 40 );              // word-safe, ellipsis inside the budget
+Text::excerpt( $body, 160 );               // collapses newlines first
+Text::initials( 'Dave Sherlock' );         // 'DS' — first and last, for a name
+Text::initials( 'Trance Vol 1', from_start: true ); // 'TV' — first two, for a title
+Text::list( ['a', 'b', 'c'] );             // 'a, b and c'
+Text::list( $tags, limit: 2 );             // 'design, audio and 4 more'
+Text::plural( 3, 'entry' );                // '3 entries'
+Text::plural( 2, 'person', 'people' );     // '2 people'
+Text::ordinal( 21 );                       // '21st'
+Text::ordinal( 11 );                       // '11th'  — the teens are the trap
 ```
 
-### Utility Methods
+Truncation counts characters, not bytes, so a limit of 20 means twenty visible characters whether the text is English or Japanese. It only breaks at a word boundary if one is reasonably near the end — otherwise a long unbroken string would collapse to almost nothing.
+
+`plural()` handles the common English endings and is not a linguistics engine: `person` becomes `persons` unless you say otherwise.
+
+**Everything here returns plain text and escapes nothing.** Escape at the point of output, for the encoding of the place it is going.
+
+## Numbers
 
 ```php
-// Em dash fallback for empty values
-Format::maybe_dash( 'value' );                  // 'value'
-Format::maybe_dash( '' );                       // '—'
-Format::maybe_dash( null );                     // '—'
+use ArrayPress\FormatUtils\Numbers;
 
-// Natural language lists
-Format::list( ['Apple'] );                      // 'Apple'
-Format::list( ['Apple', 'Banana'] );            // 'Apple and Banana'
-Format::list( ['A', 'B', 'C'] );               // 'A, B and C'
-Format::list( ['A', 'B', 'C'], ', ', ' or ' ); // 'A, B or C'
-
-// Lists with overflow handling
-$items = ['Theme A', 'Plugin B', 'Template C', 'Widget D', 'Block E'];
-
-Format::list_with_overflow( $items, 3 );        // 'Theme A, Plugin B and 3 more'
-Format::list_with_overflow( $items, 2 );        // 'Theme A and 4 more'
-
-// Custom overflow text
-Format::list_with_overflow( 
-    $items, 
-    3, 
-    ' | ',           // separator
-    ' & ',           // last separator  
-    '%d others'      // overflow text
-); // 'Theme A | Plugin B & 3 others'
+Numbers::compact( 1200 );              // '1.2k'
+Numbers::compact( 3400000 );           // '3.4M'
+Numbers::compact( 847 );               // '847'   — already readable
+Numbers::percent( 42.4 );              // '42%'
+Numbers::share( 25, 100 );             // '25%'
+Numbers::share( 5, 0 );                // '—'     — a share of nothing is undefined
+Numbers::change( 120, 100 );           // '+20%'
+Numbers::change( 50, 0 );              // 'new'
 ```
 
-## API Reference
+For money use [`sugarcommerce/currency`](https://github.com/sugarcommerce/currency) — money is integer minor units and needs its own rules.
 
-### Boolean Formatting Methods
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `yes_no($value, $title_case = false)` | Convert to translatable yes/no | `string` |
-| `on_off($value, $title_case = false)` | Convert to translatable on/off | `string` |
-| `true_false($value, $title_case = false)` | Convert to translatable true/false | `string` |
-
-### Number Formatting Methods
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `numeric($value, $decimals = 0)` | WordPress i18n number formatting with em dash fallback | `string` |
-| `percentage($value, $decimals = 0)` | Format as percentage | `string` |
-
-### Date/Time Formatting Methods
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `date($date, $format = 'F j, Y', $translate = true)` | WordPress i18n date formatting | `string` |
-| `duration($seconds, $abbreviated = false)` | Human readable duration | `string` |
-| `time_ago($date)` | Relative time formatting | `string` |
-
-### Text Formatting Methods
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `html($text)` | WordPress text processing (wpautop + wptexturize) | `string` |
-| `label($key)` | Convert key to human-readable label | `string` |
-| `excerpt($text, $length = 150, $suffix = '...')` | Multibyte-safe text truncation | `string` |
-| `email_link($email, $text = '')` | Generate mailto link | `string` |
-| `rating($rating)` | Translatable star rating with pluralization | `string` |
-
-### Utility Methods
-
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `maybe_dash($value)` | Return value or em dash if empty | `string` |
-| `list($items, $separator = ', ', $last_sep = ' and ')` | Natural language list formatting | `string` |
-| `list_with_overflow($items, $limit = 3, ...)` | List with overflow handling | `string` |
-
-### Constants
-
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `Format::MDASH` | `'&mdash;'` | HTML em dash entity |
-
-## Common Use Cases
-
-### Admin Table Display
+## Avatars
 
 ```php
-// Settings page display
-function display_settings_table( $options ) {
-    foreach ( $options as $key => $value ) {
-        echo '<tr>';
-        echo '<td>' . esc_html( Format::label( $key ) ) . '</td>';
-        
-        if ( is_bool( $value ) ) {
-            echo '<td>' . esc_html( Format::yes_no( $value, true ) ) . '</td>';
-        } elseif ( is_numeric( $value ) ) {
-            echo '<td>' . esc_html( Format::numeric( $value ) ) . '</td>';
-        } else {
-            echo '<td>' . esc_html( Format::maybe_dash( $value ) ) . '</td>';
-        }
-        
-        echo '</tr>';
-    }
-}
+use ArrayPress\FormatUtils\Avatar;
+
+Avatar::svg( 'Dave Sherlock' );        // data:image/svg+xml;utf8,… → straight into <img src>
+Avatar::hue( 'Dave Sherlock' );        // 214 — tint something else to match
+Avatar::colour( 'Dave Sherlock' );     // 'hsl(214,55%,42%)'
 ```
 
-### Content Lists
+Deterministic: the same name always yields the same colour, so a list does not reshuffle its palette as you scroll or paginate. The hue comes from a hash of the name; saturation and lightness are fixed, which keeps every generated colour in one family instead of producing the occasional neon.
+
+No network request, no upload, nothing to store. The initials are XML-escaped, because the name is user data being written into markup.
+
+## File types
 
 ```php
-// Category display with overflow
-$categories = wp_get_post_categories( $post_id, ['fields' => 'names'] );
-echo 'Categories: ' . esc_html( Format::list_with_overflow( $categories, 3 ) );
-// Output: "Categories: WordPress, PHP and 2 more"
+use ArrayPress\FormatUtils\FileType;
 
-// Tag cloud with natural language
-$tags = get_the_tags( $post_id );
-$tag_names = wp_list_pluck( $tags, 'name' );
-echo 'Tagged: ' . esc_html( Format::list( $tag_names ) );
-// Output: "Tagged: Development, Tutorial and Advanced"
+FileType::kind( 'photo.jpg' );                       // 'image'
+FileType::kind( 'https://x.com/a/photo.jpg?v=2' );   // 'image'
+FileType::kind_of_mime( 'application/pdf' );         // 'document'
+FileType::label( 'invoice.pdf' );                    // 'PDF document'
+FileType::extension( '/a/b/PHOTO.JPG' );             // 'jpg'
+FileType::kinds();                                   // key => label, for a filter
+FileType::pretty( 'https://x.com/' );                // 'x.com'
+FileType::pretty( 'Presets/Massive Pack.zip' );      // 'Massive Pack.zip'
 ```
 
-### Dashboard Statistics
+Kinds are deliberately coarse — `image`, `video`, `audio`, `document`, `sheet`, `slides`, `archive`, `code`, `font`, `other`. A file list wants six or seven buckets a person can filter by, not the ninety distinct types a MIME database knows about.
 
-```php
-$stats = get_site_statistics();
+> **Never decide whether an upload is safe from its extension.** The extension is chosen by whoever uploaded it. This is presentation only; sniff the contents.
 
-echo 'Total Users: ' . esc_html( Format::numeric( $stats['users'] ) );
-echo 'Uptime: ' . esc_html( Format::duration( $stats['uptime_seconds'] ) );
-echo 'Success Rate: ' . esc_html( Format::percentage( $stats['success_rate'] ) );
-echo 'Last Updated: ' . esc_html( Format::time_ago( $stats['last_update'] ) );
+`pretty()` keeps the extension after stripping a prefix, because without it a filename column reads like the title column above it — which is exactly the confusion it was written to fix.
+
+## Testing
+
+```bash
+composer install
+composer test
 ```
 
-## Internationalization
-
-All user-facing strings are translatable using WordPress i18n functions:
-
-- **Text Domain**: `arraypress`
-- **Translation Functions**: `__()`, `_n()` for plurals
-- **Translator Comments**: Included for context
-
-### Translatable Strings
-
-- Yes/No, On/Off, True/False formatting
-- "X more" overflow text
-- Star rating text
-- "No Rating" text
-- "ago" text
-
-## Requirements
-
-- PHP 7.4+
-- WordPress 5.0+
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+139 tests — both byte conventions and their disagreement, round trips through every parser, multi-byte truncation, the ordinal teens, avatar determinism and escaping, and file kinds from paths, URLs and MIME types.
 
 ## License
 
-This project is licensed under the GPL-2.0-or-later License.
-
-## Support
-
-- [Documentation](https://github.com/arraypress/wp-format-utils)
-- [Issue Tracker](https://github.com/arraypress/wp-format-utils/issues)
+GPL-2.0-or-later

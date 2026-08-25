@@ -1,45 +1,63 @@
 {
   "name": "arraypress/wp-format-utils",
-  "version": "1.0.0",
-  "description": "Display formatting utilities for WordPress with internationalization support",
+  "description": "Formatting for people to read: bytes, durations, file kinds, compact numbers, text and booleans.",
+  "homepage": "https://github.com/arraypress/wp-format-utils/",
   "type": "library",
   "license": "GPL-2.0-or-later",
-  "homepage": "https://github.com/arraypress/wp-format-utils/",
   "authors": [
     {
       "name": "David Sherlock",
       "homepage": "https://arraypress.com/"
     }
   ],
+  "keywords": [
+    "wordpress",
+    "formatting",
+    "bytes",
+    "duration",
+    "humanize",
+    "filesize"
+  ],
   "require": {
-    "php": ">=7.4"
+    "php": ">=8.3"
+  },
+  "require-dev": {
+    "phpcompatibility/phpcompatibility-wp": "^2.1",
+    "phpunit/phpunit": "^12.0",
+    "squizlabs/php_codesniffer": "^3.13.5",
+    "wp-coding-standards/wpcs": "^3.4"
   },
   "autoload": {
     "psr-4": {
       "ArrayPress\\FormatUtils\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "ArrayPress\\FormatUtils\\Tests\\": "tests/"
+    },
+    "exclude-from-classmap": [
+      "/tests/bootstrap.php"
+    ]
+  },
   "config": {
     "optimize-autoloader": true,
     "sort-packages": true,
-    "preferred-install": "dist"
+    "preferred-install": "dist",
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
   },
-  "minimum-stability": "dev",
+  "minimum-stability": "stable",
   "prefer-stable": true,
+  "scripts": {
+    "test": "phpunit",
+    "lint": "phpcs",
+    "format": "phpcbf --standard=phpcs-format.xml.dist",
+    "format:check": "phpcs --standard=phpcs-format.xml.dist"
+  },
   "support": {
     "issues": "https://github.com/arraypress/wp-format-utils/issues",
     "source": "https://github.com/arraypress/wp-format-utils"
-  },
-  "keywords": [
-    "wordpress",
-    "formatting",
-    "display",
-    "wp",
-    "arraypress",
-    "internationalization",
-    "i18n",
-    "templates",
-    "output",
-    "presentation"
-  ]
+  }
 }
